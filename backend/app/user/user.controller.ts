@@ -3,7 +3,7 @@ import { createResponse } from "../common/helper/response.hepler";
 import asyncHandler from "express-async-handler";
 import { type Request, type Response } from "express";
 import passport from "passport";
-import { createUserTokens } from "../common/services/passport-jwt.service";
+import { createUserTokens,decodeToken } from "../common/services/passport-jwt.service";
 import createHttpError from 'http-errors';
 
 
@@ -122,22 +122,7 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
   )(req, res);
 });
 
-/**
- * Retrieves a user's subscription status by their ID.
- * @async
- * @function getUserSubscriptionStatus
- * @param {Request} req - Express request object containing user ID in params.
- * @param {Response} res - Express response object.
- * @returns {Promise<void>} Sends a success response with the subscription status.
- */
-export const getUserSubscriptionStatus = asyncHandler(async (req: Request, res: Response) => {
-  const {id} = req.params;
-  const result = await userService.getUserSubscription(id);
-  if(result)
-  res.send(createResponse(result,"Subscribed"));
-else
-res.send(createResponse(result,"Not Subscribed"));
-});
+
 
 /**
  * Handles logging out a user by invalidating the session.
@@ -171,19 +156,91 @@ export const logoutUser = asyncHandler(async (req: Request, res: Response) => {
  * @param {Response} res - The Express response object used to send the new tokens.
  * @returns {Response} - The response containing new access and refresh tokens.
  */
-export const refreshToken = asyncHandler(async (req: Request, res: Response ) => {
-  const refToken  = req.headers.authorization?.replace("Bearer ", "");
+export const refreshToken = asyncHandler(
+  async (req: Request, res: Response) => {
+    const refToken = req.headers.authorization?.replace("Bearer ", "");
 
-  if (!refreshToken) {
-    const result = await userService.refreshToken(refToken as string);
-    res.send(createResponse(result,"Token generated "));
+    if (refToken) {
+      const result = await userService.refreshToken(refToken as string);
+      console.log("Result", result);
+      res.send(createResponse(result, "Token generated "));
+    } else {
+      res.send(createResponse(null, "Token not generated "));
+    }
   }
-  else{
-    res.send(createResponse(null,"Token not generated "));
-  }
+);
 
-  
-});
+/**
+ * Sends a password reset link to the user's email address.
+ *
+ * @async
+ * @function forgotPassword
+ * @param {Request} req - The HTTP request object containing the user's email in the body.
+ * @param {Response} res - The HTTP response object to send the result.
+ * @throws {Error} If the email is invalid or the user does not exist.
+ * @example
+ * // POST request body: { email: "user@example.com" }
+ * forgotPassword(req, res);
+ * // Response: { message: "Password reset link sent to your email" }
+ */
+
+export const forgotPassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { email } = req.body;
+
+    await userService.forgotPassword(email);
+
+    res.send(createResponse("Password reset link sent to your email"));
+  }
+);
+
+/**
+ * Resets the user's password using a provided token and new password.
+ *
+ * @async
+ * @function resetPassword
+ * @param {Request} req - The HTTP request object containing the token and new password in the body.
+ * @param {Response} res - The HTTP response object to send the result.
+ * @throws {Error} If the token is invalid, expired, or the user cannot be found.
+ * @example
+ * // POST request body: { token: "eyJhbGci...", password: "newSecurePassword" }
+ * resetPassword(req, res);
+ * // Response: { message: "Password successfully reset" }
+ */
+export const resetPassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { token, password } = req.body;
+
+    const decodedUser: any = await decodeToken(token);
+
+    await userService.resetPassword(decodedUser._id, password);
+
+    res.send(createResponse("Password successfully reset"));
+  }
+);
+
+/**
+ * @function changePassword
+ * @description Handles the password change request by validating the user's credentials and updating the password.
+ * @param {Request} req - The request object containing the user details and password change information.
+ * @param {Response} res - The response object used to send back the success message.
+ * @throws {Error} Throws an error if password change fails (e.g., invalid current password or user not found).
+ * @returns {void} Sends a response to indicate the success of the password change.
+ */
+export const changePassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { currentPassword, newPassword } = req.body;
+
+    await userService.changePassword(id, currentPassword, newPassword);
+
+    res.send(createResponse("Password successfully changed"));
+  }
+);
+
+
+
+
 
 
 

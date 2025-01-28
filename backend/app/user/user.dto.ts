@@ -8,5 +8,4 @@ export interface IUser extends BaseSchema {
         role: "USER" | "ADMIN";
         password: string;
         refToken?:string;
-        subscription:boolean;
 }

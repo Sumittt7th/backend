@@ -12,8 +12,6 @@ export const AppDataSource = new DataSource({
   logging: false,
   entities:[
     "app/user/user.entity.ts",
-    "app/video/video.entity.ts",
-    "app/analytics/analytics.entity.ts"
   ],
   migrations: ["app/common/migration/migration.ts"],
 });

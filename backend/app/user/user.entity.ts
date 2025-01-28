@@ -29,9 +29,6 @@ export class User implements IUser {
   @Column({ type: "varchar", nullable: true })
   refToken!: string | "";
 
-  @Column({ type: "boolean" })
-  subscription!: boolean;
-
   @CreateDateColumn()
   createdAt!: Date;
 

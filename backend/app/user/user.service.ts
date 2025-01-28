@@ -2,6 +2,8 @@ import { createUserTokens, decodeToken } from '../common/services/passport-jwt.s
 import { type IUser } from "./user.dto";
 import { AppDataSource } from '../common/services/postgre.service';
 import { User } from "./user.entity";
+import * as mailService from "../common/services/email.service";
+import bcrypt from "bcrypt";
 
 /**
  * Creates a new user with the specified data.
@@ -14,8 +16,7 @@ export const createUser = async (data: IUser): Promise<User> => {
     const userRepository = AppDataSource.getRepository(User);   
     const user = userRepository.create({
         ...data,
-        active: true,       
-        subscription: false,  
+        active: true,        
         refToken: ""         
     });
 
@@ -118,21 +119,6 @@ export const getUserByEmail = async (email: string): Promise<User | null> => {
     return result; 
 };
 
-/**
- * Retrieves the subscription status of a user by their ID.
- * @async
- * @function getUserSubscription
- * @param {string} id - The ID of the user to retrieve the subscription status for.
- * @returns {Promise<Object|null>} The user document with subscription details or null if not found.
- */
-export const getUserSubscription = async (id: string): Promise<boolean | null> => {
-    const userRepository = AppDataSource.getRepository(User); 
-    const user = await userRepository.findOne({
-        where: { _id: id },
-        select: ["subscription"], 
-    });
-    return user ? user.subscription : false; 
-};
 
 /**
  * Logs out a user by removing their refresh token from the database.
@@ -153,32 +139,109 @@ export const logoutUser = async (userId: string): Promise<void> => {
     user.refToken = "";
     await userRepository.save(user);
 };
-
 /**
  * Refreshes the access token using the refresh token.
  * 
- * @param {string} refreshToken - The refresh token.
- * @returns {Object} - The new access token and refresh token.
- * @throws {Error} - Throws an error if the refresh token is invalid or expired.
+ * @param {string} refsToken - The refresh token.
+ * @returns {Promise<{ accessToken: string; refreshToken: string }>} The new access token and refresh token.
+ * @throws {Error} Throws an error if the refresh token is invalid or expired.
  */
-export const refreshToken = async (refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> => {
-    try {
-        const decoded: any = decodeToken(refreshToken);
-        const userRepository = AppDataSource.getRepository(User);
-        const user = await userRepository.findOneBy({ _id: decoded.id });
-        if (!user) {
-            throw new Error("User not found");
-        }
-        if (user.refToken === refreshToken) {
-            const { accessToken, refreshToken: newRefreshToken } = createUserTokens(user);
-            user.refToken = newRefreshToken;
-            await userRepository.save(user);
+export const refreshToken = async (refsToken: string): Promise<{ accessToken: string; refreshToken: string }> => {
+    const decoded: any = decodeToken(refsToken);
+    const userRepository = AppDataSource.getRepository(User);
 
-            return { accessToken, refreshToken: newRefreshToken };
-        } else {
-            throw new Error("Invalid refresh token");
-        }
-    } catch (error) {
-        throw new Error("Invalid or expired refresh token");
+    const user = await userRepository.findOneBy({ _id: decoded._id });
+    if (!user) {
+        throw new Error('User not found');
     }
+
+    const { accessToken, refreshToken } = createUserTokens(user);
+    user.refToken = refreshToken;
+    await userRepository.save(user);
+
+    return { accessToken, refreshToken };
+};
+
+/**
+ * Sends a password reset email to the specified user.
+ *
+ * @async
+ * @function forgotPassword
+ * @param {string} email - The email address of the user requesting a password reset.
+ * @throws {Error} If the user does not exist or is unauthorized.
+ * @returns {Promise<void>}
+ */
+export const forgotPassword = async (email: string): Promise<void> => {
+    const userRepository = AppDataSource.getRepository(User);
+    const user = await userRepository.findOneBy({ email });
+
+    if (!user) {
+        throw new Error('Invalid or unauthorized user role');
+    }
+
+    const { accessToken } = createUserTokens(user);
+    const resetURL = `${process.env.FE_BASE_URL}/reset-password?token=${accessToken}`;
+
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'Password Reset Request',
+        text: `You requested a password reset. Click the link to reset your password: ${resetURL}`,
+    };
+
+    await mailService.sendEmail(mailOptions);
+};
+
+/**
+ * Resets the user's password by updating it with a new hashed password.
+ *
+ * @async
+ * @function resetPassword
+ * @param {string} id - The unique identifier of the user whose password is to be reset.
+ * @param {string} newPassword - The new password to be set for the user.
+ * @throws {Error} If the user does not exist or is unauthorized.
+ * @returns {Promise<User>} The updated user object after the password reset.
+ */
+export const resetPassword = async (id: string, newPassword: string): Promise<User> => {
+    const userRepository = AppDataSource.getRepository(User);
+    const user = await userRepository.findOneBy({ _id: id });
+
+    if (!user) {
+        throw new Error('User not found or unauthorized.');
+    }
+
+    user.password = await bcrypt.hash(newPassword, 12);
+    const updatedUser = await userRepository.save(user);
+
+    return updatedUser;
+};
+
+/**
+ * Changes the password of a user by validating the current password and updating it with the new one.
+ *
+ * @async
+ * @function changePassword
+ * @param {string} id - The unique ID of the user whose password is to be changed.
+ * @param {string} currentPassword - The current password of the user to validate.
+ * @param {string} newPassword - The new password to set for the user.
+ * @throws {Error} Throws an error if the user is not found, the current password is invalid, or the update fails.
+ * @returns {Promise<User>} Returns the updated user object after the password change.
+ */
+export const changePassword = async (id: string, currentPassword: string, newPassword: string): Promise<User> => {
+    const userRepository = AppDataSource.getRepository(User);
+    const user = await userRepository.findOneBy({ _id: id });
+
+    if (!user) {
+        throw new Error('User not found.');
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+        throw new Error('Invalid old password.');
+    }
+
+    user.password = await bcrypt.hash(newPassword, 12);
+    const updatedUser = await userRepository.save(user);
+
+    return updatedUser;
 };

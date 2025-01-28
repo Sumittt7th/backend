@@ -9,21 +9,40 @@ import { isAuthenticated } from '../common/middleware/isAuthenticate.middleware'
 const router = Router();
 
 router
-  .get("/",roleAuth("ADMIN"),isAuthenticated, userController.getAllUser)
-  .get("/:id",isAuthenticated, userController.getUserById)
-  .delete("/:id",roleAuth("ADMIN"),isAuthenticated, userController.deleteUser)
+  .get("/", roleAuth("ADMIN"), isAuthenticated, userController.getAllUser)
+  .get("/:id", isAuthenticated, userController.getUserById)
+  .delete("/:id", roleAuth("ADMIN"), isAuthenticated, userController.deleteUser)
   .post("/", userValidator.createUser, catchError, userController.createUser)
-  .put("/:id",roleAuth("ADMIN"),isAuthenticated, userValidator.updateUser, catchError, userController.updateUser)
-  .patch("/:id",isAuthenticated, userValidator.editUser, catchError, userController.editUser)
-  .post(
-    "/login",
-    userValidator.loginUser,
+  .put(
+    "/:id",
+    roleAuth("ADMIN"),
+    isAuthenticated,
+    userValidator.updateUser,
     catchError,
-    userController.loginUser
+    userController.updateUser
   )
-  .get("/subs/:id",isAuthenticated,userController.getUserSubscriptionStatus)
-  .post("/logout",isAuthenticated,catchError,userController.logoutUser)
-  .get("/reftoken",catchError,userController.refreshToken);
-
+  .patch(
+    "/:id",
+    isAuthenticated,
+    userValidator.editUser,
+    catchError,
+    userController.editUser
+  )
+  .post("/login", userValidator.loginUser, catchError, userController.loginUser)
+  .post("/logout", isAuthenticated, catchError, userController.logoutUser)
+  .post("/reftoken", catchError, userController.refreshToken)
+  .post("/forgotPassword", catchError, userController.forgotPassword)
+  .post(
+    "/reset-password",
+    userValidator.resetPassword,
+    catchError,
+    userController.resetPassword
+  )
+  .post(
+    "/changePassword/:id",
+    isAuthenticated,
+    catchError,
+    userController.changePassword
+  );
 export default router;
 
